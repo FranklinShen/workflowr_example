@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+
+<meta charset="utf-8" />
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="pandoc" />
+
+
+<meta name="author" content="Qunhua Li" />
+
+
+<title>Detect batch effect - report 1</title>
+
+<script src="site_libs/jquery-1.11.3/jquery.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="site_libs/bootstrap-3.3.5/css/bootstrap.min.css" rel="stylesheet" />
+<script src="site_libs/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/respond.min.js"></script>
+<script src="site_libs/navigation-1.1/tabsets.js"></script>
+<link href="site_libs/highlightjs-1.1/default.css" rel="stylesheet" />
+<script src="site_libs/highlightjs-1.1/highlight.js"></script>
+
+<style type="text/css">code{white-space: pre;}</style>
+<style type="text/css">
+  pre:not([class]) {
+    background-color: white;
+  }
+</style>
+<script type="text/javascript">
+if (window.hljs && document.readyState && document.readyState === "complete") {
+   window.setTimeout(function() {
+      hljs.initHighlighting();
+   }, 0);
+}
+</script>
+
+
+
+<style type="text/css">
+h1 {
+  font-size: 34px;
+}
+h1.title {
+  font-size: 38px;
+}
+h2 {
+  font-size: 30px;
+}
+h3 {
+  font-size: 24px;
+}
+h4 {
+  font-size: 18px;
+}
+h5 {
+  font-size: 16px;
+}
+h6 {
+  font-size: 12px;
+}
+.table th:not([align]) {
+  text-align: left;
+}
+</style>
+
+
+</head>
+
+<body>
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+code {
+  color: inherit;
+  background-color: rgba(0, 0, 0, 0.04);
+}
+img {
+  max-width:100%;
+  height: auto;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+</style>
+
+
+
+<div class="container-fluid main-container">
+
+<!-- tabsets -->
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+</script>
+
+<!-- code folding -->
+
+
+
+
+
+
+<div class="fluid-row" id="header">
+
+
+
+<h1 class="title toc-ignore">Detect batch effect - report 1</h1>
+<h4 class="author"><em>Qunhua Li</em></h4>
+<h4 class="date"><em>7/12/2017</em></h4>
+
+</div>
+
+
+<div id="r-markdown" class="section level1">
+<h1>R Markdown</h1>
+<p>First, one must load the data and the packages need to analyze it.</p>
+<pre class="r"><code># source(&quot;http://bioconductor.org/biocLite.R&quot;)
+# biocLite(&quot;Biobase&quot;)
+# biocLite(&quot;genefilter&quot;)
+# devtools::install_github(&quot;genomicsclass/GSE5859&quot;)
+
+library(Biobase)
+library(rafalib)
+library(GSE5859)
+library(genefilter)
+
+data(GSE5859)</code></pre>
+<p>Also, you need to extract the expression data into a usable (matrix) format.</p>
+<pre class="r"><code># gene expression levels  
+geneExpression = exprs(e)</code></pre>
+<p>Now we can check years that the data from different ethnic groups were collected. As well how the date relates to the ethnicity.</p>
+</div>
+<div id="data-collection-dates" class="section level1">
+<h1>Data collection dates</h1>
+<pre class="r"><code># print date info
+sampleInfo = pData(e)
+head(sampleInfo$date)</code></pre>
+<pre><code>## [1] &quot;2003-02-04&quot; &quot;2003-02-04&quot; &quot;2002-12-17&quot; &quot;2003-01-30&quot; &quot;2003-01-03&quot;
+## [6] &quot;2003-01-16&quot;</code></pre>
+<pre class="r"><code># Print a table of year vs ethnic groups
+year = factor( format(sampleInfo$date,&quot;%y&quot;) )
+tab = table(year,sampleInfo$ethnicity)
+print(tab)</code></pre>
+<pre><code>##     
+## year ASN CEU HAN
+##   02   0  32   0
+##   03   0  54   0
+##   04   0  13   0
+##   05  80   3   0
+##   06   2   0  24</code></pre>
+<p>In order to compare experimental data, we needt to extract the genes of interest. # Differential expression analysis</p>
+<pre class="r"><code>##remove control genes
+out &lt;- grep(&quot;AFFX&quot;,rownames(geneExpression))</code></pre>
+<p>We first use a t-test to perform differential expression analysis between CEU and ASN.</p>
+<pre class="r"><code>eth &lt;- sampleInfo$ethnicity
+ind&lt;- which(eth%in%c(&quot;CEU&quot;,&quot;ASN&quot;))
+res1 &lt;- rowttests(geneExpression[-out,ind],droplevels(eth[ind]))</code></pre>
+<p>We then perform the same analysis between 2002 vs 2003 within CEU.</p>
+<pre class="r"><code>ind &lt;- which(year%in%c(&quot;02&quot;,&quot;03&quot;) &amp; eth==&quot;CEU&quot;)
+res2 &lt;- rowttests(geneExpression[-out,ind],droplevels(year[ind]))</code></pre>
+<p>We plot histograms for p-values as in Akey et al (2007).</p>
+<pre class="r"><code>mypar(2, 2)
+hist(res1$p, main=&quot;p-value of CEU vs ASN&quot;)
+hist(res2$p, main=&quot;p-value of 2002 vs 2003 for CEU&quot;)</code></pre>
+<p><img src="Rmarkdown_example_files/figure-html/unnamed-chunk-7-1.png" width="672" /></p>
+<p>There are a lot of significant genes between the CEU samples collected in 2002 and 2003.</p>
+</div>
+
+
+
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.header').parent('thead').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

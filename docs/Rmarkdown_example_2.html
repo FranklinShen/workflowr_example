@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+
+<meta charset="utf-8" />
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="pandoc" />
+
+
+<meta name="author" content="Qunhua Li" />
+
+<meta name="date" content="2017-07-12" />
+
+<title>Detect batch effect - report 2</title>
+
+<script src="site_libs/jquery-1.11.3/jquery.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="site_libs/bootstrap-3.3.5/css/bootstrap.min.css" rel="stylesheet" />
+<script src="site_libs/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/respond.min.js"></script>
+<script src="site_libs/navigation-1.1/tabsets.js"></script>
+<link href="site_libs/highlightjs-1.1/default.css" rel="stylesheet" />
+<script src="site_libs/highlightjs-1.1/highlight.js"></script>
+
+<style type="text/css">code{white-space: pre;}</style>
+<style type="text/css">
+  pre:not([class]) {
+    background-color: white;
+  }
+</style>
+<script type="text/javascript">
+if (window.hljs && document.readyState && document.readyState === "complete") {
+   window.setTimeout(function() {
+      hljs.initHighlighting();
+   }, 0);
+}
+</script>
+
+
+
+<style type="text/css">
+h1 {
+  font-size: 34px;
+}
+h1.title {
+  font-size: 38px;
+}
+h2 {
+  font-size: 30px;
+}
+h3 {
+  font-size: 24px;
+}
+h4 {
+  font-size: 18px;
+}
+h5 {
+  font-size: 16px;
+}
+h6 {
+  font-size: 12px;
+}
+.table th:not([align]) {
+  text-align: left;
+}
+</style>
+
+
+</head>
+
+<body>
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+code {
+  color: inherit;
+  background-color: rgba(0, 0, 0, 0.04);
+}
+img {
+  max-width:100%;
+  height: auto;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+</style>
+
+
+
+<div class="container-fluid main-container">
+
+<!-- tabsets -->
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+</script>
+
+<!-- code folding -->
+
+
+
+
+
+
+<div class="fluid-row" id="header">
+
+
+
+<h1 class="title toc-ignore">Detect batch effect - report 2</h1>
+<h4 class="author"><em>Qunhua Li</em></h4>
+<h4 class="date"><em>July 12, 2017</em></h4>
+
+</div>
+
+
+<div id="r-markdown" class="section level1">
+<h1>R Markdown</h1>
+<p>First, one must load the data and the packages need to analyze it.</p>
+<pre class="r"><code># source(&quot;http://bioconductor.org/biocLite.R&quot;)
+# biocLite(&quot;Biobase&quot;)
+# biocLite(&quot;genefilter&quot;)
+# devtools::install_github(&quot;genomicsclass/GSE5859&quot;)
+
+library(Biobase)
+library(rafalib)
+library(GSE5859)
+library(genefilter)
+
+data(GSE5859)</code></pre>
+<div id="preprocessing" class="section level2">
+<h2>Preprocessing</h2>
+<p>One sample was entered twice in the dataset, so we need remove this redundant sample.</p>
+<pre class="r"><code>cors &lt;- cor(exprs(e))
+Pairs=which(abs(cors)&gt;0.9999,arr.ind=TRUE)
+out = Pairs[which(Pairs[,1]&lt;Pairs[,2]),,drop=FALSE]
+if(length(out[,2])&gt;0) e=e[,-out[2]]</code></pre>
+<p>As in report 1, we remove control probes from the analysis.</p>
+<pre class="r"><code>out &lt;- grep(&quot;AFFX&quot;,featureNames(e))
+e &lt;- e[-out,]</code></pre>
+<p>We create a detrended gene expression data matrix and extract the information on dates and ethnic group</p>
+<pre class="r"><code>y &lt;- exprs(e)-rowMeans(exprs(e))
+dates &lt;- pData(e)$date
+eth &lt;- pData(e)$ethnicity</code></pre>
+</div>
+<div id="pca-analysis" class="section level2">
+<h2>PCA analysis</h2>
+<p>We first plot of PC1 and PC2 for ethnic groups</p>
+<pre class="r"><code>s &lt;- svd(y)
+sampleInfo &lt;- pData(e)
+cols1 &lt;- c(&quot;#A3A500&quot;,&quot;#00BF7D&quot;,&quot;#E76BF3&quot;)
+cols1 &lt;- cols1[as.numeric(sampleInfo$ethnicity) ]
+plot(s$v[,1],s$v[,2],col=cols1,pch=16, xlab=&quot;PC1&quot;,
+     ylab=&quot;PC2&quot;,main = &quot;Ethnic Groups&quot;)
+legend(&quot;bottomleft&quot;,levels(sampleInfo$ethnicity),
+       col=c(&quot;#A3A500&quot;,&quot;#00BF7D&quot;,&quot;#E76BF3&quot;),pch=16)</code></pre>
+<p><img src="Rmarkdown_example_2_files/figure-html/unnamed-chunk-4-1.png" width="672" /></p>
+<p>We then plot PC1 and PC2 for years</p>
+<pre class="r"><code>sampleInfo &lt;- pData(e)
+year &lt;- factor( format(sampleInfo$date,&quot;%y&quot;) )
+cols2 &lt;- as.numeric(year)
+mypar()
+plot(s$v[,1],s$v[,2],col=cols2,pch=16, xlab=&quot;PC1&quot;,ylab=&quot;PC2&quot;)
+legend(&quot;bottomleft&quot;,levels(year),
+       col=seq(along=levels(year)),pch=16)
+title(&quot;Years&quot;)</code></pre>
+<p><img src="Rmarkdown_example_2_files/figure-html/unnamed-chunk-5-1.png" width="672" /></p>
+</div>
+</div>
+
+
+
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.header').parent('thead').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>
